@@ -127,3 +127,58 @@ button.ghost:disabled { opacity: 0.45; cursor: not-allowed; }
 
 a { color: var(--accent-2); }
 footer { margin-top: 32px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+
+/* ---- player + fullscreen ---- */
+.player { position: relative; }
+
+/* A canvas must be stretched to the container and then constrained by
+   object-fit: `width: auto` resolves to its intrinsic attribute size, which
+   scales down but never up, so a 720p backing store would sit in the middle
+   of a 1080p screen surrounded by black. */
+.player:fullscreen,
+.player:-webkit-full-screen {
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+}
+.player:fullscreen .stage,
+.player:-webkit-full-screen .stage {
+  border: 0;
+  border-radius: 0;
+  background: #000;
+  align-items: center;
+  height: 100vh;
+}
+.player:fullscreen .stage canvas,
+.player:-webkit-full-screen .stage canvas {
+  width: 100%;
+  height: 100%;
+  max-width: 100vw;
+  max-height: 100vh;
+  object-fit: contain;
+}
+
+/* Controls float over the video instead of pushing it up. */
+.player:fullscreen .transport,
+.player:-webkit-full-screen .transport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 28px 24px 18px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82), transparent);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.player:fullscreen:hover .transport,
+.player:fullscreen:focus-within .transport,
+.player:-webkit-full-screen:hover .transport,
+.player:-webkit-full-screen:focus-within .transport {
+  opacity: 1;
+}
+.player:fullscreen .time,
+.player:-webkit-full-screen .time { color: #e8e2ff; }

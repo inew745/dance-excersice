@@ -88,7 +88,8 @@ export default function Studio() {
   const background = bgChoice === 'custom' ? customBg : bgChoice === 'thumbnail' ? artBitmap : null;
 
   const previewDims = useMemo(() => {
-    const scale = Math.min(1, 920 / res.w);
+    // Backing store sized for a sharp fullscreen view, not just the panel.
+    const scale = Math.min(1, 1280 / res.w);
     return {
       w: Math.round((res.w * scale) / 2) * 2,
       h: Math.round((res.h * scale) / 2) * 2,

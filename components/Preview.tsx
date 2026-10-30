@@ -31,7 +31,10 @@ export default function Preview({ scene, audioBuffer, leadIn, totalDuration, wid
   const anchorRef = useRef({ audioT0: 0, videoT0: 0 });
   const timeRef = useRef(0);
 
+  const playerRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [isFull, setIsFull] = useState(false);
+  const [canFull, setCanFull] = useState(false);
 
   const paint = useCallback(
     (t: number) => {
@@ -124,6 +127,62 @@ export default function Preview({ scene, audioBuffer, leadIn, totalDuration, wid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, totalDuration]);
 
+  // Safari still uses the webkit-prefixed API, and iPhone Safari has no
+  // element fullscreen at all — hide the control rather than offer a no-op.
+  useEffect(() => {
+    const el = playerRef.current;
+    const withWebkit = el as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
+    setCanFull(Boolean(withWebkit?.requestFullscreen || withWebkit?.webkitRequestFullscreen));
+
+    const onChange = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element };
+      setIsFull(Boolean(document.fullscreenElement || doc.webkitFullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    const el = playerRef.current as
+      | (HTMLDivElement & { webkitRequestFullscreen?: () => void })
+      | null;
+    if (!el) return;
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element;
+      webkitExitFullscreen?: () => void;
+    };
+    try {
+      if (document.fullscreenElement || doc.webkitFullscreenElement) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else doc.webkitExitFullscreen?.();
+      } else if (el.requestFullscreen) {
+        await el.requestFullscreen();
+      } else {
+        el.webkitRequestFullscreen?.();
+      }
+    } catch {
+      // Denied (permissions policy, or not a user gesture) — leave as is.
+    }
+  }, []);
+
+  // `f` toggles, but not while someone is typing in a settings field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'f' && e.key !== 'F') return;
+      const t = e.target as HTMLElement | null;
+      if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      void toggleFullscreen();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [toggleFullscreen]);
+
   useEffect(() => {
     return () => {
       cancelAnimationFrame(rafRef.current);
@@ -142,8 +201,12 @@ export default function Preview({ scene, audioBuffer, leadIn, totalDuration, wid
   };
 
   return (
-    <div>
-      <div className="stage">
+    <div className={`player${isFull ? ' is-full' : ''}`} ref={playerRef}>
+      <div
+        className="stage"
+        onDoubleClick={() => void toggleFullscreen()}
+        title="Double-click for fullscreen"
+      >
         <canvas ref={canvasRef} width={width} height={height} />
       </div>
       <div className="transport">
@@ -170,6 +233,17 @@ export default function Preview({ scene, audioBuffer, leadIn, totalDuration, wid
           aria-label="Seek"
         />
         <span className="time" ref={labelRef}>0:00 / 0:00</span>
+        {canFull && (
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => void toggleFullscreen()}
+            aria-pressed={isFull}
+            title="Fullscreen (f, or double-click the video)"
+          >
+            {isFull ? 'Exit fullscreen' : 'Fullscreen'}
+          </button>
+        )}
       </div>
     </div>
   );
