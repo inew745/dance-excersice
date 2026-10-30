@@ -336,7 +336,22 @@ export default function Studio() {
           </div>
         )}
 
-        {error && <div className="alert err" style={{ marginTop: 14 }}>{error}</div>}
+        {error && (
+          <div className="alert err" style={{ marginTop: 14 }}>
+            {error}
+            {tab === 'youtube' && (
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => { setTab('file'); setError(null); }}
+                >
+                  Use my own audio instead →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {ready && analysis && chart && (

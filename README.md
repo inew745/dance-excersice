@@ -58,18 +58,49 @@ npm run dev     # http://localhost:3000
 Push the repo and import it at [vercel.com/new](https://vercel.com/new) — it is a stock Next.js
 app and needs no build configuration. `vercel.json` raises the audio route's timeout to 60s.
 
-### YouTube on a deployed site
+### "Sign in to confirm you're not a bot"
 
-YouTube bot-checks datacenter IPs, so `/api/audio` fails far more often from Vercel than from your
-laptop. Mitigations, in order of effort:
+Expect this on Vercel. YouTube blocks datacenter IP ranges, and every Vercel function runs on one.
+It is not a bug in the code — `lib/youtube.ts` already rotates through the `IOS`, `ANDROID_VR`,
+`ANDROID`, `TV_SIMPLY`, `MWEB` and `WEB` Innertube clients, because which one gets through keeps
+changing. When the IP itself is flagged, none of them help.
 
-1. **Use the "Use my own audio" tab.** Always works, no server round trip for the media.
-2. **Set `YOUTUBE_COOKIE`** in the Vercel project's environment variables to the `Cookie` header
-   from a signed-in youtube.com request. Also supported: `YOUTUBE_PO_TOKEN` and
-   `YOUTUBE_VISITOR_DATA`.
+Options, most durable first:
 
-`lib/youtube.ts` tries the `IOS`, `ANDROID_VR`, `ANDROID`, `TV_SIMPLY`, `MWEB` and `WEB` Innertube
-clients in turn, because which one gets through changes over time.
+**1. `YOUTUBE_PROXY_URL` — route through a non-datacenter IP.**
+
+```
+YOUTUBE_PROXY_URL=http://user:pass@residential-proxy.example:8080
+```
+
+The only fix that addresses the actual cause. Both the Innertube calls and the audio download go
+through it, which is required rather than tidy: googlevideo URLs are bound to the IP that resolved
+them, so resolving via a proxy and downloading directly returns 403. Residential and mobile proxies
+are paid services.
+
+**2. `YOUTUBE_COOKIE` — borrow a signed-in session.**
+
+Sign in to youtube.com in a private window, open DevTools → Network, click any request to
+youtube.com, and copy the entire `Cookie:` request header value.
+
+> **Use a throwaway Google account.** A session replayed from a datacenter IP is exactly the
+> pattern Google flags, and the account can be limited or banned. Never use an account you care
+> about. The cookie also dies when that browser session signs out, and expires on its own.
+
+`YOUTUBE_PO_TOKEN` and `YOUTUBE_VISITOR_DATA` are supported alongside it.
+
+**3. Run it locally.** `npm run dev` on your own machine uses your home IP, which usually is not
+blocked. For personal use this is the path of least resistance.
+
+**4. The "Use my own audio" tab.** Always works — the media never touches the server. The error
+message links straight to it.
+
+Failures report the underlying cause rather than a bare `fetch failed`, so you can tell a blocked
+IP from a dead proxy from a DNS problem:
+
+```
+Could not reach YouTube from the server (fetch failed — connect ECONNREFUSED 10.0.0.1:8080)
+```
 
 ## Browser support
 

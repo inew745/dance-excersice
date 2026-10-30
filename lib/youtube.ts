@@ -1,4 +1,5 @@
 import { Innertube } from 'youtubei.js';
+import { proxiedFetch, usingProxy } from './fetcher';
 
 export type TrackInfo = {
   id: string;
@@ -15,6 +16,8 @@ function getClient(): Promise<Innertube> {
   if (!clientPromise) {
     clientPromise = Innertube.create({
       generate_session_locally: true,
+      // Routes Innertube through YOUTUBE_PROXY_URL when one is configured.
+      fetch: proxiedFetch,
       // Optional escape hatches for when YouTube bot-checks Vercel's IPs.
       // See README: set these in the Vercel project's environment variables.
       cookie: process.env.YOUTUBE_COOKIE || undefined,
@@ -70,6 +73,25 @@ export class YouTubeError extends Error {
   }
 }
 
+/**
+ * Node's fetch reports almost every network problem as a bare "fetch failed"
+ * and hides the real reason on `cause`. Without this, a DNS failure, a refused
+ * proxy connection and a TLS error are indistinguishable in the logs.
+ */
+function describeError(err: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = err;
+  for (let depth = 0; current instanceof Error && depth < 4; depth++) {
+    const code = (current as NodeJS.ErrnoException).code;
+    const text = code && !current.message.includes(code)
+      ? `${current.message} [${code}]`
+      : current.message;
+    if (text && !parts.includes(text)) parts.push(text);
+    current = (current as { cause?: unknown }).cause;
+  }
+  return parts.join(' — ') || String(err);
+}
+
 async function getInfo(videoId: string) {
   let yt: Innertube;
   try {
@@ -78,7 +100,7 @@ async function getInfo(videoId: string) {
     // Session setup failing means YouTube was not reachable at all, which is a
     // different problem from a video being unavailable — say so plainly rather
     // than letting a bare "fetch failed" reach the user.
-    const detail = err instanceof Error ? err.message : String(err);
+    const detail = describeError(err);
     throw new YouTubeError(
       `Could not reach YouTube from the server (${detail}). Check the deployment's outbound ` +
         `network access, or use the "Use my own audio" tab.`,
@@ -100,11 +122,14 @@ async function getInfo(videoId: string) {
     }
   }
 
-  const detail = lastErr instanceof Error ? lastErr.message : String(lastErr);
+  const detail = describeError(lastErr);
   if (/bot|sign in|consent|429/i.test(detail)) {
     throw new YouTubeError(
-      `YouTube is bot-checking this server (${detail}). Set YOUTUBE_COOKIE in the Vercel ` +
-        `project's environment variables, or use the "Use my own audio" tab instead.`,
+      `YouTube is bot-checking this server (${detail}).${
+        usingProxy() ? ' The configured proxy did not get through either.' : ''
+      } Fixes, most durable first: route through a non-datacenter IP with YOUTUBE_PROXY_URL, ` +
+        `set YOUTUBE_COOKIE (use a throwaway Google account — Google can flag it), or use the ` +
+        `"Use my own audio" tab, which never touches the server.`,
       429,
     );
   }

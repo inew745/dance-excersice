@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { proxiedFetch } from '@/lib/fetcher';
 import { parseVideoId, resolveAudioSource, YouTubeError } from '@/lib/youtube';
 
 export const runtime = 'nodejs';
@@ -18,7 +19,9 @@ export async function GET(req: Request) {
   try {
     const source = await resolveAudioSource(videoId);
 
-    const upstream = await fetch(source.url, {
+    // Must use the same dispatcher that resolved the URL: googlevideo ties
+    // the URL to the requesting IP.
+    const upstream = await proxiedFetch(source.url, {
       headers: {
         // Without an explicit range googlevideo throttles the transfer hard.
         range: 'bytes=0-',
