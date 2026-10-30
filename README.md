@@ -1,7 +1,7 @@
 # Dance Exercise Chart Maker
 
-Paste a YouTube link, get a five-lane dance-exercise rhythm video rendered with the audio. Spotify
-links and local audio files work too.
+Paste a YouTube link or drop in an audio file, and get a five-lane dance-exercise rhythm video
+rendered with the audio.
 
 The track is analysed for tempo and onsets, a move chart is written onto the beat grid, and the
 gameplay scene is rendered to a video file — MP4 where the browser can, WebM otherwise.
@@ -102,53 +102,6 @@ IP from a dead proxy from a DNS problem:
 ```
 Could not reach YouTube from the server (fetch failed — connect ECONNREFUSED 10.0.0.1:8080)
 ```
-
-## Importing from Spotify
-
-A Spotify track link fills in the **title, artist and cover art**. It cannot supply the audio, and
-that is not a gap to be plugged later:
-
-- Full tracks are DRM-protected (Widevine) and only decode inside Spotify's own player. There is no
-  licensed download path.
-- `GET /v1/audio-analysis` and `GET /v1/audio-features` — which return Spotify's own beat, bar and
-  section grid, and would have charted better than local onset detection — were closed to new apps
-  on **27 November 2024**. Apps without an approved quota extension from before that date get 403.
-- 30-second `preview_url` values were restricted in the same round.
-
-So the flow is: paste the link to name the video and grab the artwork, then add an audio file you
-have the rights to. If your audio length differs from Spotify's by more than 5s, the app says so —
-usually it means a different edit, or the wrong file.
-
-### Credentials
-
-Create an app at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and set:
-
-```
-SPOTIFY_CLIENT_ID=...
-SPOTIFY_CLIENT_SECRET=...
-```
-
-Only the Client Credentials flow is used — this reads public catalogue data, so there is no user
-login and no redirect URI to configure. Without these the Spotify tab returns a 503 saying exactly
-that.
-
-Accepted link forms: `open.spotify.com/track/<id>`, locale-prefixed
-`open.spotify.com/intl-de/track/<id>`, `spotify:track:<id>`, or a bare 22-character id.
-
-The dashboard makes you enter a **Redirect URI** to create the app even though Client Credentials
-never redirects. Any valid value works; use `http://127.0.0.1:3000/callback` — Spotify rejects
-`http://localhost`, allowing plain HTTP only for explicit loopback IPs.
-
-### If lookups return 403
-
-Spotify's refusal reason is passed through, so the error names the cause. The common one is the app
-being in **Development Mode**: reports indicate Spotify's February 2026 migration moved Dev Mode
-apps off Client Credentials for metadata endpoints and now expects the app owner to have Premium.
-Check the app's mode in the dashboard. Nothing else in the app depends on Spotify — the
-**Use my own audio** tab needs no account.
-
-`SPOTIFY_API_BASE` and `SPOTIFY_ACCOUNTS_BASE` override the endpoints, which is how the error paths
-are tested against a mock.
 
 ## Desktop app (macOS / Windows / Linux)
 
