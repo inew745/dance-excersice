@@ -71,7 +71,21 @@ export class YouTubeError extends Error {
 }
 
 async function getInfo(videoId: string) {
-  const yt = await getClient();
+  let yt: Innertube;
+  try {
+    yt = await getClient();
+  } catch (err) {
+    // Session setup failing means YouTube was not reachable at all, which is a
+    // different problem from a video being unavailable — say so plainly rather
+    // than letting a bare "fetch failed" reach the user.
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new YouTubeError(
+      `Could not reach YouTube from the server (${detail}). Check the deployment's outbound ` +
+        `network access, or use the "Use my own audio" tab.`,
+      502,
+    );
+  }
+
   let lastErr: unknown = null;
 
   for (const client of CLIENTS) {
@@ -90,7 +104,7 @@ async function getInfo(videoId: string) {
   if (/bot|sign in|consent|429/i.test(detail)) {
     throw new YouTubeError(
       `YouTube is bot-checking this server (${detail}). Set YOUTUBE_COOKIE in the Vercel ` +
-        `project's environment variables, or use the "Upload audio" tab instead.`,
+        `project's environment variables, or use the "Use my own audio" tab instead.`,
       429,
     );
   }

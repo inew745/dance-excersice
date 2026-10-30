@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "mp4-muxer": "^5.2.2",
-    "next": "^15.5.4",
+    "next": "^16.4.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "youtubei.js": "^18.3.0"
