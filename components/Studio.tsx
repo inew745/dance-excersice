@@ -14,6 +14,7 @@ import {
   splitTitle,
 } from '@/lib/pipeline';
 import { detectCapability, renderVideo, type Capability, type ExportFormat } from '@/lib/render';
+import type { SpotifyTrack } from '@/lib/spotify';
 import { Scene } from '@/lib/scene';
 
 const RESOLUTIONS = [
@@ -23,7 +24,7 @@ const RESOLUTIONS = [
 ] as const;
 
 type ResId = (typeof RESOLUTIONS)[number]['id'];
-type Tab = 'youtube' | 'file';
+type Tab = 'youtube' | 'file' | 'spotify';
 type BgChoice = 'arena' | 'thumbnail' | 'custom';
 
 const DIFFICULTIES: { id: Difficulty; label: string }[] = [
@@ -40,6 +41,10 @@ function slugify(s: string): string {
 export default function Studio() {
   const [tab, setTab] = useState<Tab>('youtube');
   const [url, setUrl] = useState('');
+  const [spotifyUrl, setSpotifyUrl] = useState('');
+  const [spotifyMeta, setSpotifyMeta] = useState<SpotifyTrack | null>(null);
+  /** What the fetched art actually is, so the background menu can say so. */
+  const [artLabel, setArtLabel] = useState('Video thumbnail');
 
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState('');
@@ -124,6 +129,53 @@ export default function Studio() {
     setError(null);
   };
 
+  /**
+   * Spotify's full audio is DRM-protected and cannot be downloaded, and the
+   * audio-analysis endpoint has been closed to new apps since Nov 2024. So a
+   * Spotify link supplies the naming and the cover art, and the audio comes
+   * from a file you provide.
+   */
+  const lookupSpotify = async () => {
+    if (!spotifyUrl.trim()) return;
+    reset();
+    setSpotifyMeta(null);
+    setBusy(true);
+    setStage('Looking up the track');
+    setProgress(0.5);
+    try {
+      const res = await fetch('/api/spotify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: spotifyUrl }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+
+      const meta = body as SpotifyTrack;
+      setSpotifyMeta(meta);
+      setTitle(meta.title);
+      setArtist(meta.artist);
+
+      if (meta.hasArt) {
+        try {
+          const art = await fetch(`/api/spotify/art?id=${encodeURIComponent(meta.id)}`);
+          if (art.ok) {
+            setArtBitmap(await createImageBitmap(await art.blob()));
+            setArtLabel('Album cover');
+          }
+        } catch {
+          // Cover art is optional; the painted arena is the default anyway.
+        }
+      }
+      setProgress(1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Spotify lookup failed.');
+    } finally {
+      setBusy(false);
+      setStage('');
+    }
+  };
+
   const ingest = useCallback(
     async (buffer: ArrayBuffer, meta: { title: string; artist: string }, videoId: string | null) => {
       setStage('Decoding audio');
@@ -171,8 +223,12 @@ export default function Studio() {
     }
   };
 
-  const loadFile = async (file: File) => {
+  const loadFile = async (file: File, override?: { title: string; artist: string }) => {
+    const keepMeta = override ?? null;
+    // reset() clears the art, but in the Spotify flow it was fetched already.
+    const keepArt = override ? artBitmap : null;
     reset();
+    if (keepArt) setArtBitmap(keepArt);
     setBusy(true);
     setProgress(0);
     try {
@@ -182,7 +238,7 @@ export default function Studio() {
       const dash = name.match(/^(.*?)\s*[-–—]\s*(.*)$/);
       await ingest(
         buffer,
-        dash ? { title: dash[2], artist: dash[1] } : { title: name, artist: 'Your audio' },
+        keepMeta ?? (dash ? { title: dash[2], artist: dash[1] } : { title: name, artist: 'Your audio' }),
         null,
       );
     } catch (err) {
@@ -286,6 +342,15 @@ export default function Studio() {
           >
             Use my own audio
           </button>
+          <button
+            type="button"
+            role="tab"
+            className="tab"
+            aria-selected={tab === 'spotify'}
+            onClick={() => setTab('spotify')}
+          >
+            Spotify link
+          </button>
         </div>
 
         {tab === 'youtube' ? (
@@ -313,6 +378,60 @@ export default function Studio() {
               works locally. If it does, use <strong>Use my own audio</strong>, or set a{' '}
               <code>YOUTUBE_COOKIE</code> environment variable (see the README).
             </p>
+          </>
+        ) : tab === 'spotify' ? (
+          <>
+            <div className="row">
+              <input
+                type="url"
+                placeholder="https://open.spotify.com/track/…"
+                value={spotifyUrl}
+                onChange={(e) => setSpotifyUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !busy) void lookupSpotify(); }}
+                disabled={busy || rendering}
+              />
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void lookupSpotify()}
+                disabled={busy || rendering || !spotifyUrl.trim()}
+              >
+                {busy ? 'Working…' : 'Look up'}
+              </button>
+            </div>
+
+            {spotifyMeta ? (
+              <div style={{ marginTop: 14 }}>
+                <p className="note">
+                  Found <strong>{spotifyMeta.title}</strong> — {spotifyMeta.artist}
+                  {spotifyMeta.album ? ` · ${spotifyMeta.album}` : ''} ·{' '}
+                  {Math.floor(spotifyMeta.durationSec / 60)}:
+                  {String(spotifyMeta.durationSec % 60).padStart(2, '0')}
+                  {artBitmap ? ' · cover art loaded' : ''}
+                </p>
+                <p className="note" style={{ marginTop: 10 }}>
+                  <strong>Now add your audio for this track:</strong>
+                </p>
+                <input
+                  type="file"
+                  accept="audio/*,video/*"
+                  disabled={busy || rendering}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      void loadFile(f, { title: spotifyMeta.title, artist: spotifyMeta.artist });
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <p className="note" style={{ marginTop: 10 }}>
+                A Spotify link fills in the title, artist and cover art — it cannot supply the
+                audio. Full tracks are DRM-protected, and Spotify closed its audio-analysis
+                endpoint to new apps in November 2024, so the beat detection runs on a file you
+                provide. Needs <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code>.
+              </p>
+            )}
           </>
         ) : (
           <>
@@ -373,6 +492,13 @@ export default function Studio() {
               <span><b>{analysis.onsets.length.toLocaleString('en-US')}</b>onsets found</span>
               <span><b>{Math.floor(totalDuration / 60)}:{String(Math.floor(totalDuration % 60)).padStart(2, '0')}</b>video length</span>
             </div>
+            {spotifyMeta && Math.abs(analysis.duration - spotifyMeta.durationSec) > 5 && (
+              <div className="alert warn" style={{ marginTop: 12 }}>
+                Your audio is {Math.round(analysis.duration)}s but Spotify lists this track as{' '}
+                {spotifyMeta.durationSec}s. Probably a different edit, or the wrong file — the
+                chart follows the audio you uploaded either way.
+              </div>
+            )}
           </section>
 
           <section className="panel">
@@ -427,7 +553,7 @@ export default function Studio() {
                 <label htmlFor="bg">Background</label>
                 <select id="bg" value={bgChoice} onChange={(e) => setBgChoice(e.target.value as BgChoice)}>
                   <option value="arena">Painted arena (built in)</option>
-                  <option value="thumbnail" disabled={!artBitmap}>Video thumbnail</option>
+                  <option value="thumbnail" disabled={!artBitmap}>{artLabel}</option>
                   <option value="custom" disabled={!customBg}>My own image</option>
                 </select>
                 <input
