@@ -24,6 +24,14 @@ const RESOLUTIONS = [
 
 type ResId = (typeof RESOLUTIONS)[number]['id'];
 type Tab = 'youtube' | 'file';
+
+type SearchHit = {
+  id: string;
+  title: string;
+  channel: string;
+  durationSec: number;
+  thumbnail: string | null;
+};
 type BgChoice = 'arena' | 'thumbnail' | 'custom';
 
 const DIFFICULTIES: { id: Difficulty; label: string }[] = [
@@ -33,6 +41,16 @@ const DIFFICULTIES: { id: Difficulty; label: string }[] = [
   { id: 'expert', label: 'Expert · eighths + doubles' },
 ];
 
+/** 225 -> "3:45", 3723 -> "1:02:03". */
+function fmtDuration(total: number): string {
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    : `${m}:${String(sec).padStart(2, '0')}`;
+}
+
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'chart';
 }
@@ -40,6 +58,10 @@ function slugify(s: string): string {
 export default function Studio() {
   const [tab, setTab] = useState<Tab>('youtube');
   const [url, setUrl] = useState('');
+  const [searchEnabled, setSearchEnabled] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState('');
@@ -79,6 +101,17 @@ export default function Studio() {
     detectCapability(res.w, res.h, fps).then((c) => { if (!cancelled) setCaps(c); });
     return () => { cancelled = true; };
   }, [res.w, res.h, fps]);
+
+  // A query-less call reports whether YOUTUBE_API_KEY is configured, so the
+  // search box is hidden rather than shown broken.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/search')
+      .then((r) => r.json())
+      .then((b) => { if (!cancelled) setSearchEnabled(Boolean(b.enabled)); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   const chart = useMemo(
     () => (analysis ? buildChart(analysis, difficulty) : null),
@@ -147,14 +180,15 @@ export default function Studio() {
     [],
   );
 
-  const loadYouTube = async () => {
-    if (!url.trim()) return;
+  const loadYouTube = async (explicit?: string) => {
+    const target = explicit ?? url;
+    if (!target.trim()) return;
     reset();
     setBusy(true);
     setProgress(0);
     try {
       setStage('Looking up the video');
-      const info = await resolveYouTube(url);
+      const info = await resolveYouTube(target);
       const meta = splitTitle(info);
 
       setStage('Downloading audio');
@@ -168,6 +202,23 @@ export default function Studio() {
     } finally {
       setBusy(false);
       setStage('');
+    }
+  };
+
+  const runSearch = async () => {
+    if (!query.trim()) return;
+    setError(null);
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+      setResults(body.results ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Search failed.');
+      setResults(null);
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -308,10 +359,64 @@ export default function Studio() {
                 {busy ? 'Working…' : 'Load track'}
               </button>
             </div>
-            <p className="note" style={{ marginTop: 10 }}>
-              YouTube blocks datacenter IPs often, so this can fail on a deployed site even when it
-              works locally. If it does, use <strong>Use my own audio</strong>, or set a{' '}
-              <code>YOUTUBE_COOKIE</code> environment variable (see the README).
+            {searchEnabled && (
+              <div style={{ marginTop: 16 }}>
+                <div className="row">
+                  <input
+                    type="text"
+                    placeholder="…or search YouTube by song name"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !searching) void runSearch(); }}
+                    disabled={busy || rendering || searching}
+                  />
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => void runSearch()}
+                    disabled={busy || rendering || searching || !query.trim()}
+                  >
+                    {searching ? 'Searching…' : 'Search'}
+                  </button>
+                </div>
+
+                {results && results.length === 0 && (
+                  <p className="note" style={{ marginTop: 10 }}>No results.</p>
+                )}
+
+                {results && results.length > 0 && (
+                  <div className="results">
+                    {results.map((r) => (
+                      <button
+                        type="button"
+                        key={r.id}
+                        className="result"
+                        disabled={busy || rendering}
+                        onClick={() => {
+                          const link = `https://www.youtube.com/watch?v=${r.id}`;
+                          setUrl(link);
+                          void loadYouTube(link);
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        {r.thumbnail && <img src={r.thumbnail} alt="" loading="lazy" />}
+                        <span className="result-title">{r.title}</span>
+                        <span className="result-meta">
+                          {r.channel}
+                          {r.durationSec > 0 && ` · ${fmtDuration(r.durationSec)}`}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <p className="note" style={{ marginTop: 14 }}>
+              Metadata and search use the official YouTube Data API, but it has no endpoint for
+              audio — that still comes from the player, which YouTube bot-checks on datacenter IPs.
+              So this can fail on a deployed site while working locally or in the desktop app. If it
+              does, use <strong>Use my own audio</strong>.
             </p>
           </>
         ) : (

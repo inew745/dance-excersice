@@ -1,7 +1,7 @@
 # Dance Exercise Chart Maker
 
-Paste a YouTube link or drop in an audio file, and get a five-lane dance-exercise rhythm video
-rendered with the audio.
+Search YouTube, paste a link, or drop in an audio file, and get a five-lane dance-exercise rhythm
+video rendered with the audio.
 
 The track is analysed for tempo and onsets, a move chart is written onto the beat grid, and the
 gameplay scene is rendered to a video file — MP4 where the browser can, WebM otherwise.
@@ -9,8 +9,10 @@ gameplay scene is rendered to a video file — MP4 where the browser can, WebM o
 ## How it works
 
 ```
-YouTube URL ──► /api/resolve ──► track metadata
-                /api/audio   ──► audio bytes (proxied; googlevideo URLs are IP-locked + no CORS)
+YouTube     ──► /api/search  ──► Data API search (official, key, no bot check)
+                /api/resolve ──► track metadata (Data API, falling back to Innertube)
+                /api/audio   ──► audio bytes (Innertube only — no official endpoint exists;
+                                 proxied because googlevideo URLs are IP-locked + send no CORS)
                      │
                      ▼
             decodeAudioData ──► AudioBuffer
@@ -102,6 +104,40 @@ IP from a dead proxy from a DNS problem:
 ```
 Could not reach YouTube from the server (fetch failed — connect ECONNREFUSED 10.0.0.1:8080)
 ```
+
+## YouTube Data API (metadata and search)
+
+Setting `YOUTUBE_API_KEY` turns on search-by-name and makes metadata lookups official rather than
+scraped. Without it the app still works — metadata falls back to Innertube and the search box is
+hidden.
+
+```
+YOUTUBE_API_KEY=AIza...
+```
+
+Create it in the [Google Cloud console](https://console.cloud.google.com/apis/credentials): enable
+**YouTube Data API v3** for the project, then make an API key. Restrict it to that one API.
+
+**It does not solve the audio problem.** The Data API has no endpoint that returns a media stream,
+so `/api/audio` still goes through the player and is still bot-checked on datacenter IPs. What the
+key fixes is the half that *can* be done officially:
+
+| | Without a key | With a key |
+|---|---|---|
+| Search by name | unavailable | yes |
+| Metadata / thumbnail | Innertube, bot-checked | official, reliable |
+| Audio | Innertube, bot-checked | **unchanged** |
+
+So on Vercel you get dependable search and titles, then supply the audio yourself. In the desktop
+app, where audio works anyway, the key makes the whole flow feel native.
+
+### Quota
+
+The free quota is 10,000 units/day. `search.list` costs **100** units, so roughly 100 searches a
+day; `videos.list` costs 1. Search is a button rather than search-as-you-type for exactly this
+reason. Exhausting the quota returns a 403 naming the reason, and nothing else in the app breaks.
+
+`YOUTUBE_API_BASE` overrides the endpoint, which is how the search paths are tested against a mock.
 
 ## Desktop app (macOS / Windows / Linux)
 

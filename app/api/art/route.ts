@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchTrackInfo, parseVideoId } from '@/lib/youtube';
+import { fetchVideo, hasApiKey } from '@/lib/youtube-api';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,12 +15,30 @@ export async function GET(req: Request) {
   if (!videoId) return NextResponse.json({ error: 'Missing or invalid ?v=' }, { status: 400 });
 
   try {
-    const { thumbnail } = await fetchTrackInfo(videoId);
-    const candidates = [
-      thumbnail,
+    const candidates: string[] = [];
+
+    if (hasApiKey()) {
+      try {
+        const v = await fetchVideo(videoId);
+        if (v.thumbnail) candidates.push(v.thumbnail);
+      } catch {
+        // Fall through to Innertube and the well-known URLs.
+      }
+    }
+
+    if (!candidates.length) {
+      try {
+        const { thumbnail } = await fetchTrackInfo(videoId);
+        if (thumbnail) candidates.push(thumbnail);
+      } catch {
+        // Still have the predictable i.ytimg.com paths below.
+      }
+    }
+
+    candidates.push(
       `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
       `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-    ].filter(Boolean) as string[];
+    );
 
     for (const url of candidates) {
       const res = await fetch(url);

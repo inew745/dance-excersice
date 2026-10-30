@@ -6,9 +6,9 @@ export default function Home() {
       <header className="masthead">
         <h1>Dance Exercise Chart Maker</h1>
         <p>
-          Drop in a YouTube link. The track is analysed for tempo and onsets, a five-lane move
-          chart is written to the beat, and the whole thing is rendered to a video with the audio —
-          all in your browser.
+          Search YouTube or drop in a link — or use your own audio file. The track is analysed for
+          tempo and onsets, a five-lane move chart is written to the beat, and the whole thing is
+          rendered to a video with the audio, all in your browser.
         </p>
       </header>
       <Studio />
