@@ -83,8 +83,17 @@ are paid services.
 
 **2. `YOUTUBE_COOKIE` — borrow a signed-in session.**
 
-Sign in to youtube.com in a private window, open DevTools → Network, click any request to
-youtube.com, and copy the entire `Cookie:` request header value.
+Sign in to youtube.com in a private window, then: **F12 → Network → reload the page →** click the
+top `www.youtube.com` document request **→ Headers → Request Headers →** switch on the **Raw**
+toggle, and copy everything after `cookie:` on that line.
+
+The Raw toggle matters — the parsed view Chrome shows by default hides the header. Do not use the
+Application/Storage cookie table (that is a table, not a header), and do not use `document.cookie`
+in the console: YouTube's auth cookies are `HttpOnly`, so they never appear there and the string
+you get will silently fail.
+
+A leading `cookie:` label, wrapped lines and surrounding quotes are stripped automatically, so a
+slightly messy paste still works.
 
 > **Use a throwaway Google account.** A session replayed from a datacenter IP is exactly the
 > pattern Google flags, and the account can be limited or banned. Never use an account you care

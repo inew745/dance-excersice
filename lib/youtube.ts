@@ -9,6 +9,24 @@ export type TrackInfo = {
   thumbnail: string | null;
 };
 
+/**
+ * People copy the cookie straight out of DevTools, which commonly brings a
+ * leading "cookie:" label, wrapped lines from the Vercel textarea, or
+ * surrounding quotes. Any of those make the header invalid and YouTube just
+ * treats the request as signed out, so normalise rather than fail silently.
+ */
+function cleanCookie(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const value = raw
+    .trim()
+    .replace(/^cookie\s*:\s*/i, '')
+    .replace(/^["']|["']$/g, '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return value || undefined;
+}
+
 /** Innertube is expensive to construct, so keep one per warm lambda. */
 let clientPromise: Promise<Innertube> | null = null;
 
@@ -20,7 +38,7 @@ function getClient(): Promise<Innertube> {
       fetch: proxiedFetch,
       // Optional escape hatches for when YouTube bot-checks Vercel's IPs.
       // See README: set these in the Vercel project's environment variables.
-      cookie: process.env.YOUTUBE_COOKIE || undefined,
+      cookie: cleanCookie(process.env.YOUTUBE_COOKIE),
       po_token: process.env.YOUTUBE_PO_TOKEN || undefined,
       visitor_data: process.env.YOUTUBE_VISITOR_DATA || undefined,
     }).catch((err) => {
