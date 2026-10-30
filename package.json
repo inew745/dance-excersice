@@ -1,12 +1,17 @@
 {
-  "name": "yt-visualizer",
+  "name": "dance-exercise-chart-maker",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "desktop:build": "node scripts/build-desktop.mjs",
+    "desktop:start": "electron electron/main.js",
+    "dist:mac": "npm run desktop:build && electron-builder --mac",
+    "dist:win": "npm run desktop:build && electron-builder --win",
+    "dist:linux": "npm run desktop:build && electron-builder --linux"
   },
   "dependencies": {
     "mp4-muxer": "^5.2.2",
@@ -20,6 +25,79 @@
     "@types/node": "^22.18.1",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
     "typescript": "^5.9.2"
+  },
+  "main": "electron/main.js",
+  "description": "Turn a track into a five-lane dance-exercise rhythm video.",
+  "build": {
+    "appId": "com.danceexercise.chartmaker",
+    "productName": "Dance Exercise Chart Maker",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "desktop/app",
+        "to": "app"
+      },
+      {
+        "from": "desktop/app/node_modules",
+        "to": "app/node_modules"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.healthcare-fitness",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "darkModeSupport": true
+    },
+    "dmg": {
+      "title": "Dance Exercise Chart Maker"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "AudioVideo",
+      "icon": "build/icon.png",
+      "executableName": "dance-exercise-chart-maker"
+    }
   }
 }

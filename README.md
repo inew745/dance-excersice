@@ -135,6 +135,64 @@ that.
 Accepted link forms: `open.spotify.com/track/<id>`, locale-prefixed
 `open.spotify.com/intl-de/track/<id>`, `spotify:track:<id>`, or a bare 22-character id.
 
+The dashboard makes you enter a **Redirect URI** to create the app even though Client Credentials
+never redirects. Any valid value works; use `http://127.0.0.1:3000/callback` — Spotify rejects
+`http://localhost`, allowing plain HTTP only for explicit loopback IPs.
+
+### If lookups return 403
+
+Spotify's refusal reason is passed through, so the error names the cause. The common one is the app
+being in **Development Mode**: reports indicate Spotify's February 2026 migration moved Dev Mode
+apps off Client Credentials for metadata endpoints and now expects the app owner to have Premium.
+Check the app's mode in the dashboard. Nothing else in the app depends on Spotify — the
+**Use my own audio** tab needs no account.
+
+`SPOTIFY_API_BASE` and `SPOTIFY_ACCOUNTS_BASE` override the endpoints, which is how the error paths
+are tested against a mock.
+
+## Desktop app (macOS / Windows / Linux)
+
+The web deploy and the desktop build run the same Next app; the desktop one wraps it in Electron
+and starts the server inside the app, so **no Node install is needed on the user's machine**.
+
+Worth it for one reason above all: a desktop build runs on your own connection, and YouTube does
+not bot-check residential IPs the way it blocks Vercel's. The import that fails on the deployed
+site generally just works here.
+
+```bash
+npm install
+npm run dist:mac      # .dmg + .zip for arm64 and x64
+npm run dist:win      # NSIS installer
+npm run dist:linux    # AppImage
+```
+
+`npm run desktop:build` alone produces the unpacked bundle under `desktop/app` without packaging.
+
+### Building for macOS
+
+Run `npm run dist:mac` **on a Mac**. A `.dmg` needs macOS tooling (`hdiutil`), so it cannot be
+produced from Linux or Windows — a cross-build can only emit the `.app` inside a `.zip`.
+
+The build is **unsigned** unless you have an Apple Developer certificate, so Gatekeeper will refuse
+it on first open with "cannot be opened because the developer cannot be verified". Either:
+
+- right-click the app → **Open** → **Open** (only needed once), or
+- `xattr -cr "/Applications/Dance Exercise Chart Maker.app"`
+
+To ship it without that, set `CSC_LINK` and `CSC_KEY_PASSWORD` to a Developer ID certificate and
+notarize — see electron-builder's code signing docs.
+
+### How it is wired
+
+- `output: 'standalone'` is enabled only when `BUILD_DESKTOP=1`, so Vercel deploys are unchanged.
+- Next's standalone output omits `.next/static` and `public`; `scripts/build-desktop.mjs` copies
+  them in, otherwise the app loads unstyled.
+- `electron/main.js` picks a free port, forks the server with `ELECTRON_RUN_AS_NODE`, waits for it
+  to answer, then opens the window.
+- `node_modules` is copied by naming it as its own `extraResources` entry. electron-builder strips
+  a nested `node_modules` from `extraResources`, which leaves the packaged server unable to
+  `require('next')`.
+
 ## Browser support
 
 | | MP4 (WebCodecs) | WebM (MediaRecorder) |

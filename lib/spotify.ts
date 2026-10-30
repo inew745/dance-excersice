@@ -37,6 +37,30 @@ export function parseTrackId(input: string): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * Spotify explains its refusals in the response body. Discarding that leaves
+ * a bare status code, which is never enough to act on.
+ */
+async function spotifyReason(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as {
+      error?: string | { message?: string; reason?: string };
+      error_description?: string;
+    };
+    if (typeof body.error === 'string') {
+      return body.error_description ? `${body.error}: ${body.error_description}` : body.error;
+    }
+    const e = body.error;
+    if (e?.message) return e.reason ? `${e.message} (${e.reason})` : e.message;
+  } catch {
+    // Not JSON — nothing to add beyond the status.
+  }
+  return '';
+}
+
+/** Base URL is overridable so the error paths can be tested against a mock. */
+const API_BASE = process.env.SPOTIFY_API_BASE || 'https://api.spotify.com';
+
 type Token = { value: string; expiresAt: number };
 let cachedToken: Token | null = null;
 
@@ -57,7 +81,7 @@ async function getToken(): Promise<string> {
 
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) return cachedToken.value;
 
-  const res = await fetch('https://accounts.spotify.com/api/token', {
+  const res = await fetch(`${process.env.SPOTIFY_ACCOUNTS_BASE || 'https://accounts.spotify.com'}/api/token`, {
     method: 'POST',
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
@@ -68,10 +92,12 @@ async function getToken(): Promise<string> {
   });
 
   if (!res.ok) {
+    const reason = await spotifyReason(res);
     throw new SpotifyError(
       res.status === 400 || res.status === 401
-        ? 'Spotify rejected the client credentials — check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.'
-        : `Spotify token request failed with HTTP ${res.status}.`,
+        ? `Spotify rejected the client credentials${reason ? `: ${reason}` : ''} — check ` +
+          `SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET for stray spaces or newlines.`
+        : `Spotify token request failed with HTTP ${res.status}${reason ? `: ${reason}` : ''}.`,
       res.status === 400 || res.status === 401 ? 401 : 502,
     );
   }
@@ -94,7 +120,7 @@ type RawTrack = {
 
 async function getRawTrack(trackId: string): Promise<RawTrack> {
   const token = await getToken();
-  const res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+  const res = await fetch(`${API_BASE}/v1/tracks/${trackId}`, {
     headers: { authorization: `Bearer ${token}` },
     cache: 'no-store',
   });
@@ -107,7 +133,21 @@ async function getRawTrack(trackId: string): Promise<RawTrack> {
   if (res.status === 429) {
     throw new SpotifyError('Spotify is rate limiting this app. Wait a moment and retry.', 429);
   }
-  if (!res.ok) throw new SpotifyError(`Spotify returned HTTP ${res.status}.`);
+  if (res.status === 403) {
+    const reason = await spotifyReason(res);
+    throw new SpotifyError(
+      `Spotify refused this request${reason ? `: ${reason}` : ' (403)'}. The usual cause is the ` +
+        `app still being in Development Mode — reports indicate Spotify's February 2026 migration ` +
+        `moved Dev Mode apps off the Client Credentials flow for metadata, and now expects the ` +
+        `app owner to have Premium. Check the app's mode in the Spotify dashboard. The ` +
+        `"Use my own audio" tab needs no Spotify account at all.`,
+      403,
+    );
+  }
+  if (!res.ok) {
+    const reason = await spotifyReason(res);
+    throw new SpotifyError(`Spotify returned HTTP ${res.status}${reason ? `: ${reason}` : ''}.`);
+  }
 
   return (await res.json()) as RawTrack;
 }
