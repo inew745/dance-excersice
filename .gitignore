@@ -7,3 +7,6 @@ next-env.d.ts
 *.tsbuildinfo
 desktop
 release
+android/AndroidApp/build
+android/AndroidApp/assets/app.js
+*.apk

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Dance Exercise Chart Maker</title>
+<style>
+  :root { --bg:#0a0618; --panel:#160e30; --line:#2e2158; --text:#f2eeff; --muted:#a99ccf; --accent:#b14bff; --accent2:#ff4fd8; --ok:#3fe0b0; --err:#ff5d73; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+  body { padding:16px 14px 48px; max-width:720px; margin:0 auto; }
+  h1 { font-size:24px; font-weight:900; margin:4px 0 4px; background:linear-gradient(92deg,#fff,var(--accent2),var(--accent)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  p.sub { color:var(--muted); font-size:13px; margin:0 0 16px; line-height:1.5; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+  h2 { font-size:12px; letter-spacing:1.2px; text-transform:uppercase; color:var(--muted); margin:0 0 12px; }
+  input[type=url],input[type=text],select { width:100%; background:#0d0822; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:11px 12px; font-size:15px; margin-bottom:10px; }
+  input[type=file] { color:var(--muted); font-size:14px; }
+  .row { display:flex; gap:8px; }
+  .row input { flex:1; margin-bottom:0; }
+  button { background:linear-gradient(95deg,var(--accent),var(--accent2)); color:#fff; border:0; border-radius:10px; padding:11px 18px; font-size:15px; font-weight:800; }
+  button:disabled { opacity:.5; }
+  button.sec { background:#0d0822; border:1px solid var(--line); }
+  .stage { background:#000; border-radius:12px; overflow:hidden; border:1px solid var(--line); margin-bottom:10px; }
+  canvas { display:block; width:100%; height:auto; }
+  .status { font-size:13px; color:var(--muted); margin-top:8px; min-height:18px; }
+  .status.error { color:var(--err); } .status.ok { color:var(--ok); }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  label.fld { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); display:block; margin-bottom:4px; }
+  a.dl { display:none; margin-top:12px; text-decoration:none; background:linear-gradient(95deg,var(--accent),var(--accent2)); color:#fff; padding:12px 18px; border-radius:10px; font-weight:800; text-align:center; }
+  #studio { display:none; }
+  .note { font-size:12px; color:var(--muted); margin-top:8px; line-height:1.5; }
+</style>
+</head>
+<body>
+  <h1>Dance Exercise Chart Maker</h1>
+  <p class="sub">Load a track, get a five-lane dance chart rendered to a video — all on your phone.</p>
+
+  <div class="panel">
+    <h2>Source</h2>
+    <div class="row" id="ytRow" style="display:none; margin-bottom:10px;">
+      <input type="url" id="ytUrl" placeholder="YouTube link…" />
+      <button id="loadYt">Load</button>
+    </div>
+    <p class="note" id="ytNote"></p>
+    <label class="fld">Or pick an audio file</label>
+    <input type="file" id="fileIn" accept="audio/*,video/*" />
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="panel" id="studio">
+    <h2>Preview</h2>
+    <div class="stage"><canvas id="preview" width="640" height="360"></canvas></div>
+    <div class="grid">
+      <div>
+        <label class="fld">Difficulty</label>
+        <select id="difficulty">
+          <option value="easy">Easy</option>
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Hard</option>
+          <option value="expert">Expert</option>
+        </select>
+      </div>
+      <div>
+        <label class="fld">Resolution</label>
+        <select id="resolution">
+          <option value="720" selected>720p</option>
+          <option value="1080">1080p</option>
+          <option value="vertical">Vertical</option>
+        </select>
+      </div>
+      <div>
+        <label class="fld">Title</label>
+        <input type="text" id="titleIn" />
+      </div>
+      <div>
+        <label class="fld">Artist</label>
+        <input type="text" id="artistIn" />
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <button id="exportBtn">Render video</button>
+      <a class="dl" id="download"></a>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
