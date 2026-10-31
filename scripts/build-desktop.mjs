@@ -45,4 +45,16 @@ if (existsSync(join(root, 'public'))) {
   cpSync(join(root, 'public'), join(out, 'public'), { recursive: true });
 }
 
+// Next's file tracer copies `sharp` into the bundle even with image
+// optimization disabled, and here it is a Linux binary that cannot load on
+// macOS. Nothing in this app uses it (no next/image), so prune it — otherwise
+// a cross-built mac app ships an unloadable native module.
+for (const dir of ['@img', 'sharp']) {
+  const target = join(out, 'node_modules', dir);
+  if (existsSync(target)) {
+    rmSync(target, { recursive: true, force: true });
+    console.log(`  pruned node_modules/${dir}`);
+  }
+}
+
 console.log(`\n✓ desktop bundle ready at ${out}`);

@@ -16,13 +16,31 @@ export async function decodeAudio(data: ArrayBuffer): Promise<AudioBuffer> {
 }
 
 async function readError(res: Response): Promise<string> {
+  // Read as text so a non-JSON body (a framework error page, a crash) is not
+  // discarded — an opaque "HTTP 500" with no detail is impossible to diagnose
+  // remotely, which matters most in the packaged desktop app.
+  let text = '';
   try {
-    const body = (await res.json()) as { error?: string };
+    text = await res.text();
+  } catch {
+    return `Request failed with HTTP ${res.status}.`;
+  }
+
+  try {
+    const body = JSON.parse(text) as { error?: string };
     if (body.error) return body.error;
   } catch {
-    /* not JSON */
+    /* not JSON — fall through to the snippet */
   }
-  return `Request failed with HTTP ${res.status}.`;
+
+  const snippet = text
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 300);
+  return snippet
+    ? `HTTP ${res.status}: ${snippet}`
+    : `Request failed with HTTP ${res.status}.`;
 }
 
 export async function resolveYouTube(url: string): Promise<TrackInfo> {
