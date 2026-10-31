@@ -416,7 +416,8 @@ export default function Studio() {
               Metadata and search use the official YouTube Data API, but it has no endpoint for
               audio — that still comes from the player, which YouTube bot-checks on datacenter IPs.
               So this can fail on a deployed site while working locally or in the desktop app. If it
-              does, use <strong>Use my own audio</strong>.
+              does, use <strong>Use my own audio</strong>, or set up a cookie with the{' '}
+              <a href="/cookie-help" target="_blank" rel="noreferrer">cookie checker</a>.
             </p>
           </>
         ) : (
