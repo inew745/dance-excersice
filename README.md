@@ -1,7 +1,7 @@
 # Dance Exercise Chart Maker
 
-Search YouTube, paste a link, or drop in an audio file, and get a five-lane dance-exercise rhythm
-video rendered with the audio.
+Search YouTube, paste a YouTube or SoundCloud link, or drop in an audio file, and get a five-lane
+dance-exercise rhythm video rendered with the audio.
 
 The track is analysed for tempo and onsets, a move chart is written onto the beat grid, and the
 gameplay scene is rendered to a video file — MP4 where the browser can, WebM otherwise.
@@ -147,6 +147,28 @@ day; `videos.list` costs 1. Search is a button rather than search-as-you-type fo
 reason. Exhausting the quota returns a 403 naming the reason, and nothing else in the app breaks.
 
 `YOUTUBE_API_BASE` overrides the endpoint, which is how the search paths are tested against a mock.
+
+## SoundCloud import
+
+A SoundCloud track link loads the audio directly — no bot wall like YouTube's.
+
+```
+SOUNDCLOUD_CLIENT_ID=...
+```
+
+SoundCloud's api-v2 (the one the web player uses) requires a `client_id`, and official app
+registration has been closed for years, so this reads one from the environment rather than
+embedding anything. With it set, a **SoundCloud** tab appears; without it the tab stays hidden and
+the route returns a 503 saying so. There is no bot-check or anti-fraud control involved here — it
+is an ordinary API call with a credential you supply.
+
+Resolution prefers the single-file **progressive** (MP3) stream. Tracks offered only as segmented
+**HLS** can't be downloaded here — those return a clear 422 pointing at the upload tab. Set links
+(playlists) aren't supported.
+
+`SOUNDCLOUD_API_BASE` overrides the endpoint, which is how the routes are tested against a mock.
+
+As with YouTube, only make charts from audio you have the rights to use.
 
 ## Desktop app (macOS / Windows / Linux)
 
