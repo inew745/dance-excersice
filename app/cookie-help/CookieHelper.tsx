@@ -24,14 +24,14 @@ export default function CookieHelper() {
     <div className="panel" style={{ marginTop: 18 }}>
       <h2>Check a cookie</h2>
       <p className="note" style={{ marginBottom: 12 }}>
-        Paste the value you copied. Everything here runs in your browser — the cookie is never
-        sent anywhere, so nothing to worry about pasting it.
+        Paste the <strong>Copy as cURL</strong> command (or just the raw cookie value). Everything
+        here runs in your browser — nothing is sent anywhere.
       </p>
 
       <textarea
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
-        placeholder="Paste the cookie header value here…"
+        placeholder="Paste the Copy as cURL command, or the raw cookie value…"
         spellCheck={false}
         rows={5}
         style={{

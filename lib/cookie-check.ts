@@ -11,8 +11,31 @@ export const SECURE_ANY = ['__Secure-1PSID', '__Secure-3PSID'] as const;
 
 const SIGN_IN_NAMES = [...REQUIRED, ...SECURE_ANY] as string[];
 
+/**
+ * Pull the cookie out of a pasted "Copy as cURL" command.
+ *
+ * Chromium emits the cookie either as `-b 'name=v; ...'` or inside a
+ * `-H 'cookie: ...'` header; the quotes may be single or double, and the
+ * multi-line form uses trailing backslashes. Returns null when the paste is
+ * not a cURL command, so a plain cookie paste falls through unchanged.
+ */
+export function extractFromCurl(raw: string): string | null {
+  if (!/\bcurl\b/.test(raw)) return null;
+  const joined = raw.replace(/\\\r?\n/g, ' ');
+
+  const b = joined.match(/(?:^|\s)-b\s+(['"])([\s\S]*?)\1/);
+  if (b && /=/.test(b[2])) return b[2];
+
+  const h = joined.match(/-H\s+(['"])\s*cookie\s*:\s*([\s\S]*?)\1/i);
+  if (h) return h[2];
+
+  return null;
+}
+
 export function normalize(raw: string): string {
-  return raw
+  const fromCurl = extractFromCurl(raw);
+  const base = fromCurl ?? raw;
+  return base
     .trim()
     .replace(/^cookie\s*:\s*/i, '')
     .replace(/^["']|["']$/g, '')
