@@ -8,12 +8,8 @@ import { DEFAULT_MOVES, type Move } from '@/lib/moves';
 import {
   bitmapFromFile,
   decodeAudio,
-  fetchSoundCloudArt,
-  fetchSoundCloudAudio,
   fetchYouTubeArt,
   fetchYouTubeAudio,
-  probeSoundCloud,
-  resolveSoundCloud,
   resolveYouTube,
   splitTitle,
 } from '@/lib/pipeline';
@@ -27,7 +23,7 @@ const RESOLUTIONS = [
 ] as const;
 
 type ResId = (typeof RESOLUTIONS)[number]['id'];
-type Tab = 'youtube' | 'soundcloud' | 'file';
+type Tab = 'youtube' | 'file';
 
 type SearchHit = {
   id: string;
@@ -67,8 +63,6 @@ export default function Studio() {
   const [results, setResults] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
 
-  const [scUrl, setScUrl] = useState('');
-  const [scEnabled, setScEnabled] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState('');
@@ -117,7 +111,6 @@ export default function Studio() {
       .then((r) => r.json())
       .then((b) => { if (!cancelled) setSearchEnabled(Boolean(b.enabled)); })
       .catch(() => undefined);
-    probeSoundCloud().then((on) => { if (!cancelled) setScEnabled(on); });
     return () => { cancelled = true; };
   }, []);
 
@@ -207,35 +200,6 @@ export default function Studio() {
       await ingest(buffer, meta, info.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
-    } finally {
-      setBusy(false);
-      setStage('');
-    }
-  };
-
-  const loadSoundCloud = async () => {
-    if (!scUrl.trim()) return;
-    reset();
-    setBusy(true);
-    setProgress(0);
-    try {
-      setStage('Looking up the track');
-      const meta = await resolveSoundCloud(scUrl);
-
-      setStage('Downloading audio');
-      const buffer = await fetchSoundCloudAudio(scUrl, (received, total) => {
-        setProgress(total ? 0.05 + (received / total) * 0.28 : 0.1);
-      });
-
-      await ingest(buffer, { title: meta.title, artist: meta.artist }, null);
-
-      if (meta.artwork) {
-        setStage('Fetching artwork');
-        const art = await fetchSoundCloudArt(scUrl);
-        if (art) setArtBitmap(art);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'SoundCloud load failed.');
     } finally {
       setBusy(false);
       setStage('');
@@ -365,17 +329,6 @@ export default function Studio() {
           >
             YouTube link
           </button>
-          {scEnabled && (
-            <button
-              type="button"
-              role="tab"
-              className="tab"
-              aria-selected={tab === 'soundcloud'}
-              onClick={() => setTab('soundcloud')}
-            >
-              SoundCloud
-            </button>
-          )}
           <button
             type="button"
             role="tab"
@@ -466,32 +419,6 @@ export default function Studio() {
               So this can fail on a deployed site while working locally or in the desktop app. If it
               does, use <strong>Use my own audio</strong>, or set up a cookie with the{' '}
               <a href="/cookie-help" target="_blank" rel="noreferrer">cookie checker</a>.
-            </p>
-          </>
-        ) : tab === 'soundcloud' ? (
-          <>
-            <div className="row">
-              <input
-                type="url"
-                placeholder="https://soundcloud.com/artist/track"
-                value={scUrl}
-                onChange={(e) => setScUrl(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !busy) void loadSoundCloud(); }}
-                disabled={busy || rendering}
-              />
-              <button
-                type="button"
-                className="primary"
-                onClick={() => void loadSoundCloud()}
-                disabled={busy || rendering || !scUrl.trim()}
-              >
-                {busy ? 'Working…' : 'Load track'}
-              </button>
-            </div>
-            <p className="note" style={{ marginTop: 10 }}>
-              Paste a SoundCloud track link. Works best with tracks offered as a progressive (MP3)
-              stream; segmented (HLS-only) tracks can&apos;t be downloaded here. Only make charts
-              from audio you have the rights to use.
             </p>
           </>
         ) : (
